@@ -1,0 +1,301 @@
+<!DOCTYPE html>
+<html dir="rtl" lang="ar">
+<head>
+  <base target="_top">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700&display=swap');
+    
+    body {
+      font-family: 'Cairo', sans-serif;
+      background-color: #f8fafc;
+      color: #334155;
+      padding: 20px;
+      margin: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* Container Styling */
+    .card {
+      background: white;
+      padding: 30px;
+      border-radius: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.05);
+      width: 100%;
+      max-width: 380px;
+      text-align: center;
+    }
+
+    h2 { margin: 0 0 10px 0; color: #1e293b; }
+    p { margin: 0 0 20px 0; color: #64748b; font-size: 14px; }
+
+    /* Progress Steps */
+    .steps-container {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      margin-top: 20px;
+      text-align: right;
+    }
+
+    .step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 10px;
+      border-radius: 8px;
+      background: #f1f5f9;
+      transition: all 0.3s ease;
+      opacity: 0.5;
+    }
+
+    .step.active {
+      background: #fff;
+      border: 1px solid #e2e8f0;
+      opacity: 1;
+      transform: translateX(-5px);
+    }
+
+    .step.completed {
+      background: #f0fdf4; /* Green tint */
+      border: 1px solid #bbf7d0;
+      opacity: 1;
+    }
+
+    .step.error {
+      background: #fef2f2;
+      border: 1px solid #fecaca;
+      opacity: 1;
+    }
+
+    .step-icon {
+      width: 24px;
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* Loading Spinner */
+    .spinner {
+      width: 18px;
+      height: 18px;
+      border: 3px solid #cbd5e1;
+      border-top: 3px solid #3b82f6;
+      border-radius: 50%;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+    /* Buttons */
+    .btn {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 8px;
+      font-family: 'Cairo', sans-serif;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 20px;
+      transition: background 0.2s;
+    }
+    .btn:hover { background: #2563eb; }
+    .btn:disabled { background: #cbd5e1; cursor: not-allowed; }
+    .btn-secondary { background: #fff; color: #64748b; border: 1px solid #e2e8f0; margin-top: 10px; }
+    
+    /* Error Message Area */
+    #errorArea {
+      margin-top: 15px;
+      color: #ef4444;
+      font-size: 13px;
+      display: none;
+      background: #fef2f2;
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    /* Initial Confirmation View */
+    #confirmView { display: block; }
+    #progressView { display: none; }
+    #successView { display: none; }
+
+    /* Success Checkmark Animation */
+    .checkmark-wrapper { display: flex; justify-content: center; margin-bottom: 20px; }
+    .checkmark-circle {
+      width: 60px; height: 60px; border-radius: 50%; background: #22c55e;
+      display: flex; align-items: center; justify-content: center;
+      box-shadow: 0 4px 10px rgba(34, 197, 94, 0.3);
+      animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    }
+    .checkmark { color: white; font-size: 30px; }
+    @keyframes popIn { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+
+  </style>
+</head>
+<body>
+
+  <div id="confirmView" class="card">
+    <div style="font-size: 40px; margin-bottom: 10px;">🔒</div>
+    <h2>تأكيد إغلاق اليوم</h2>
+    <p>هل أنت متأكد من رغبتك في إغلاق الوردية وترحيل البيانات؟</p>
+    <div id="validationMsg" style="margin-bottom: 15px; font-weight: bold; color: #3b82f6;">
+      <i class="fas fa-spinner fa-spin"></i> جاري التحقق من الشروط...
+    </div>
+    <button id="startBtn" class="btn" onclick="startProcess()" disabled>نعم، ابدأ الإغلاق</button>
+    <button class="btn btn-secondary" onclick="google.script.host.close()">إلغاء</button>
+  </div>
+
+  <div id="progressView" class="card">
+    <h2>جاري العمل...</h2>
+    <p>يرجى الانتظار حتى اكتمال جميع العمليات</p>
+    
+    <div class="steps-container">
+      <div id="step1" class="step active">
+        <div class="step-icon">
+          <div class="spinner"></div>
+        </div>
+        <span>نسخ وتوثيق التقرير</span>
+      </div>
+
+      <div id="step2" class="step">
+        <div class="step-icon"><i class="far fa-circle"></i></div>
+        <span>مسح بيانات الخطط والإنتاج</span>
+      </div>
+
+      <div id="step3" class="step">
+        <div class="step-icon"><i class="far fa-circle"></i></div>
+        <span>تحديث استهلاك الخامات</span>
+      </div>
+    </div>
+    
+    <div id="errorArea"></div>
+  </div>
+
+  <div id="successView" class="card">
+    <div class="checkmark-wrapper">
+      <div class="checkmark-circle">
+        <i class="fas fa-check checkmark"></i>
+      </div>
+    </div>
+    <h2>تم الإغلاق بنجاح!</h2>
+    <p>تم ترحيل البيانات وتحديث المخازن وإغلاق الوردية.</p>
+    <button class="btn" onclick="google.script.host.close()">إغلاق</button>
+  </div>
+
+  <script>
+    // On Load: Validate Conditions immediately
+    window.onload = function() {
+      google.script.run
+        .withSuccessHandler(function(result) {
+          const msgDiv = document.getElementById('validationMsg');
+          const btn = document.getElementById('startBtn');
+          
+          if (result.success) {
+            msgDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + result.msg;
+            msgDiv.style.color = '#10b981'; // Green
+            btn.disabled = false;
+          } else {
+            msgDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> ' + result.msg;
+            msgDiv.style.color = '#ef4444'; // Red
+            btn.innerText = "لا يمكن الإغلاق (تحقق من الأخطاء)";
+          }
+        })
+        .withFailureHandler(handleError)
+        .step1_validate();
+    };
+
+    function startProcess() {
+      // Switch to Progress View
+      document.getElementById('confirmView').style.display = 'none';
+      document.getElementById('progressView').style.display = 'block';
+
+      // RUN SEQUENCE
+      runStep1();
+    }
+
+    // --- SEQUENTIAL EXECUTION ---
+
+    function runStep1() {
+      // Actually Step 2 in backend (Copy Report)
+      google.script.run
+        .withSuccessHandler(function() {
+          markStepComplete('step1');
+          activateStep('step2');
+          runStep2();
+        })
+        .withFailureHandler(function(e) { handleProcessError('step1', e); })
+        .step2_copyReport();
+    }
+
+    function runStep2() {
+      // Backend: Clear Data
+      google.script.run
+        .withSuccessHandler(function() {
+          markStepComplete('step2');
+          activateStep('step3');
+          runStep3();
+        })
+        .withFailureHandler(function(e) { handleProcessError('step2', e); })
+        .step3_clearData();
+    }
+
+    function runStep3() {
+      // Backend: Consumption
+      google.script.run
+        .withSuccessHandler(function(res) {
+          if (res && res.success === false) {
+             handleProcessError('step3', res.error);
+          } else {
+             markStepComplete('step3');
+             setTimeout(showSuccess, 800);
+          }
+        })
+        .withFailureHandler(function(e) { handleProcessError('step3', e); })
+        .step4_updateConsumption();
+    }
+
+    // --- UI HELPERS ---
+
+    function activateStep(id) {
+      const el = document.getElementById(id);
+      el.classList.add('active');
+      el.querySelector('.step-icon').innerHTML = '<div class="spinner"></div>';
+    }
+
+    function markStepComplete(id) {
+      const el = document.getElementById(id);
+      el.classList.remove('active');
+      el.classList.add('completed');
+      el.querySelector('.step-icon').innerHTML = '<i class="fas fa-check" style="color:#22c55e"></i>';
+    }
+
+    function handleProcessError(stepId, error) {
+      const el = document.getElementById(stepId);
+      el.classList.remove('active');
+      el.classList.add('error');
+      el.querySelector('.step-icon').innerHTML = '<i class="fas fa-times" style="color:#ef4444"></i>';
+      
+      const errDiv = document.getElementById('errorArea');
+      errDiv.style.display = 'block';
+      errDiv.innerText = 'حدث خطأ: ' + (error.message || error);
+    }
+
+    function showSuccess() {
+      document.getElementById('progressView').style.display = 'none';
+      document.getElementById('successView').style.display = 'block';
+    }
+
+    function handleError(e) {
+      alert("System Error: " + e.message);
+    }
+  </script>
+</body>
+</html>
