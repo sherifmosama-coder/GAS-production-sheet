@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    .custom-scrollbar::-webkit-scrollbar { width: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 6px; }
+    .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 6px; }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 p-5 flex flex-col h-screen select-none">
+
+  <!-- Header -->
+  <div class="flex justify-between items-center pb-3 border-b border-slate-200 shrink-0">
+    <div>
+      <h2 class="text-base font-black text-slate-800 flex items-center">
+        <i class="fas fa-layer-group text-blue-600 mr-2"></i> Pending Date Batches
+      </h2>
+      <p class="text-xs text-slate-500 font-medium mt-0.5">Select date ranges to sync into Target Materials.</p>
+    </div>
+    <button onclick="loadRanges()" class="text-xs bg-white border border-slate-200 px-2.5 py-1.5 rounded-lg text-slate-600 hover:text-blue-600 font-bold shadow-sm" title="Re-scan for updates">
+      <i class="fas fa-sync-alt" id="refreshIcon"></i>
+    </button>
+  </div>
+
+  <!-- Action Bar -->
+  <div class="flex justify-between items-center py-2 shrink-0 text-xs">
+    <div class="space-x-2">
+      <button onclick="toggleAll(true)" class="text-blue-600 hover:underline font-bold">Select All</button>
+      <span class="text-slate-300">|</span>
+      <button onclick="toggleAll(false)" class="text-slate-500 hover:underline font-bold">Deselect All</button>
+    </div>
+    <span id="selectedCount" class="font-bold text-slate-400">0 selected</span>
+  </div>
+
+  <!-- Ranges List -->
+  <div id="rangeListContainer" class="flex-1 overflow-y-auto custom-scrollbar space-y-2 pr-1 my-1">
+    <div class="text-center py-16 text-slate-400 font-bold text-sm">
+      <i class="fas fa-circle-notch fa-spin text-2xl text-blue-500 mb-3 block"></i> Scanning consumption dates...
+    </div>
+  </div>
+
+  <!-- Progress Bar (Hidden by default) -->
+  <div id="progressSection" class="hidden shrink-0 pt-3 border-t border-slate-200">
+    <div class="flex justify-between text-xs font-bold text-slate-600 mb-1">
+      <span id="progressStatus">Processing...</span>
+      <span id="progressPercent">0%</span>
+    </div>
+    <div class="w-full bg-slate-200 rounded-full h-2 overflow-hidden">
+      <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300 w-0"></div>
+    </div>
+  </div>
+
+  <!-- Footer Actions -->
+  <div class="pt-3 mt-2 border-t border-slate-200 flex justify-between items-center shrink-0">
+    <button onclick="google.script.host.close()" class="px-4 py-2 text-xs font-bold text-slate-500 hover:bg-slate-200 rounded-xl transition">
+      Close
+    </button>
+    <button id="btnProcess" onclick="startBatchProcessing()" class="bg-blue-600 hover:bg-blue-700 text-white text-xs font-black px-6 py-2.5 rounded-xl shadow-md transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center">
+      <i class="fas fa-play mr-1.5 text-[10px]"></i> Process Selected
+    </button>
+  </div>
+
+  <script>
+    let globalRanges = [];
+
+    window.onload = function() {
+      loadRanges();
+    };
+
+    function loadRanges() {
+      const container = document.getElementById('rangeListContainer');
+      const icon = document.getElementById('refreshIcon');
+      icon.classList.add('fa-spin');
+      container.innerHTML = `
+        <div class="text-center py-16 text-slate-400 font-bold text-sm">
+          <i class="fas fa-circle-notch fa-spin text-2xl text-blue-500 mb-3 block"></i> Scanning consumption dates...
+        </div>`;
+
+      google.script.run
+        .withSuccessHandler(response => {
+          icon.classList.remove('fa-spin');
+          if (response.error) {
+            container.innerHTML = `<div class="text-center py-10 text-red-500 font-bold text-xs">${response.error}</div>`;
+            return;
+          }
+          globalRanges = response.ranges || [];
+          renderRanges();
+        })
+        .withFailureHandler(err => {
+          icon.classList.remove('fa-spin');
+          container.innerHTML = `<div class="text-center py-10 text-red-500 font-bold text-xs">${err.message}</div>`;
+        })
+        .getConsumptionRanges();
+    }
+
+    function renderRanges() {
+      const container = document.getElementById('rangeListContainer');
+      if (globalRanges.length === 0) {
+        container.innerHTML = `
+          <div class="text-center py-16 text-slate-400 font-bold">
+            <i class="fas fa-check-circle text-4xl text-emerald-400 mb-3 block"></i>
+            All consumption columns are up to date!
+          </div>`;
+        updateCount();
+        return;
+      }
+
+      let html = '';
+      globalRanges.forEach((range, idx) => {
+        html += `
+          <label id="card_${range.id}" class="flex items-center justify-between p-3 bg-white border border-slate-200 rounded-xl hover:border-blue-400 hover:shadow-sm cursor-pointer transition">
+            <div class="flex items-center space-x-3 rtl:space-x-reverse">
+              <input type="checkbox" data-index="${idx}" class="range-checkbox w-4 h-4 text-blue-600 rounded border-slate-300 focus:ring-blue-500 cursor-pointer" onchange="updateCount()" checked>
+              <div>
+                <span class="text-xs font-black text-slate-800 block">${range.label}</span>
+                <span class="text-[10px] text-slate-400 font-mono">Cols: ${range.startCol} → ${range.startCol + range.numCols - 1}</span>
+              </div>
+            </div>
+            <span id="status_${range.id}" class="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded-md">Pending</span>
+          </label>
+        `;
+      });
+      container.innerHTML = html;
+      updateCount();
+    }
+
+    function toggleAll(checked) {
+      document.querySelectorAll('.range-checkbox:not(:disabled)').forEach(cb => cb.checked = checked);
+      updateCount();
+    }
+
+    function updateCount() {
+      const total = document.querySelectorAll('.range-checkbox:checked').length;
+      document.getElementById('selectedCount').innerText = `${total} selected`;
+      document.getElementById('btnProcess').disabled = (total === 0);
+    }
+
+    // Client-side Promise wrapper for Google Script Run
+    function processBatchPromise(startCol, numCols) {
+      return new Promise((resolve, reject) => {
+        google.script.run
+          .withSuccessHandler(resolve)
+          .withFailureHandler(reject)
+          .processSingleConsumptionBatch(startCol, numCols);
+      });
+    }
+
+    async function startBatchProcessing() {
+      const selectedBoxes = Array.from(document.querySelectorAll('.range-checkbox:checked:not(:disabled)'));
+      if (selectedBoxes.length === 0) return;
+
+      const btn = document.getElementById('btnProcess');
+      btn.disabled = true;
+
+      const progressSection = document.getElementById('progressSection');
+      const progressBar = document.getElementById('progressBar');
+      const progressStatus = document.getElementById('progressStatus');
+      const progressPercent = document.getElementById('progressPercent');
+
+      progressSection.classList.remove('hidden');
+
+      for (let i = 0; i < selectedBoxes.length; i++) {
+        const cb = selectedBoxes[i];
+        const idx = parseInt(cb.dataset.index);
+        const range = globalRanges[idx];
+        const statusBadge = document.getElementById(`status_${range.id}`);
+        const card = document.getElementById(`card_${range.id}`);
+
+        // Update active status
+        const pct = Math.round((i / selectedBoxes.length) * 100);
+        progressBar.style.width = pct + '%';
+        progressPercent.innerText = pct + '%';
+        progressStatus.innerText = `Syncing (${i + 1}/${selectedBoxes.length}): ${range.label}`;
+        
+        statusBadge.innerText = 'Syncing...';
+        statusBadge.className = 'text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md animate-pulse';
+
+        try {
+          await processBatchPromise(range.startCol, range.numCols);
+
+          // Mark completed
+          cb.checked = false;
+          cb.disabled = true;
+          card.classList.add('opacity-50', 'bg-slate-100');
+          statusBadge.innerText = 'Synced';
+          statusBadge.className = 'text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-md';
+        } catch (err) {
+          statusBadge.innerText = 'Failed';
+          statusBadge.className = 'text-[10px] font-bold text-red-600 bg-red-50 px-2 py-0.5 rounded-md';
+        }
+      }
+
+      progressBar.style.width = '100%';
+      progressPercent.innerText = '100%';
+      progressStatus.innerText = 'Processing complete!';
+      btn.disabled = false;
+      updateCount();
+    }
+  </script>
+</body>
+</html>
